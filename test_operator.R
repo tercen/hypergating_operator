@@ -1,7 +1,87 @@
+# Test script for hypergate operator
+# This script can be used to test the operator locally
+
 library(tercen)
 library(dplyr)
 library(tidyr)
 library(tibble)
+library(hypergate)
+
+# Mock data generation for testing
+generate_test_data <- function(n_events = 1000, n_markers = 5) {
+  # Generate random marker names
+  marker_names <- paste0("Marker", 1:n_markers)
+  
+  # Generate random event IDs
+  event_ids <- 0:(n_events-1)
+  
+  # Generate random expression data
+  set.seed(123)
+  expression_data <- matrix(
+    runif(n_events * n_markers, 0, 1),
+    nrow = n_events,
+    ncol = n_markers,
+    dimnames = list(NULL, marker_names)
+  )
+  
+  # Create main data in long format
+  main_data <- data.frame()
+  for (i in 1:n_markers) {
+    marker_data <- tibble(
+      .ci = rep(event_ids, each = 1),
+      .ri = rep(i-1, n_events),
+      .y = expression_data[, i]
+    )
+    main_data <- rbind(main_data, marker_data)
+  }
+  
+  # Create row data (marker information)
+  row_data <- tibble(
+    .ri = 0:(n_markers-1),
+    logicle..variable = paste0("Channel", 1:n_markers),
+    logicle..channel_description = marker_names
+  )
+  
+  # Create column data (event information)
+  col_data <- tibble(
+    .ci = event_ids,
+    logicle..event_id = paste0("Event", 1:n_events)
+  )
+  
+  list(
+    main_data = main_data,
+    row_data = row_data,
+    col_data = col_data
+  )
+}
+
+# Generate test data
+test_data <- generate_test_data(1000, 5)
+
+# Mock Tercen context
+mock_ctx <- list(
+  op.value = function(name) {
+    switch(
+      name,
+      "high_expression" = 0.7,
+      "low_expression" = 0.3,
+      "expressed_marker" = "Marker1",
+      "not_expressed_marker" = "Marker5",
+      NULL
+    )
+  },
+  addNamespace = function(df) df,
+  save = function(df) {
+    cat("Would save data with dimensions:", nrow(df), "x", ncol(df), "\n")
+    print(head(df))
+    invisible(df)
+  }
+)
+
+# Mock select, cselect, rselect functions
+select <- function(ctx) test_data$main_data
+cselect <- function(ctx) test_data$col_data
+rselect <- function(ctx) test_data$row_data
 
 # Set verbose flag for detailed logging
 verbose <- TRUE
@@ -13,26 +93,13 @@ log_message <- function(message) {
   }
 }
 
-log_message("Starting Hypergate Operator")
-
-# Load hypergate package
-library(hypergate)
-
-# Get Tercen context
-# http://127.0.0.1:5400/kumo_test/w/0b4ec8f92d47f8a388859024bb0186e7/ds/4a4a5702-7e70-4266-bba8-a00309029928
-# options("tercen.workflowId"= "0b4ec8f92d47f8a388859024bb0186e7")
-# options("tercen.stepId"= "4a4a5702-7e70-4266-bba8-a00309029928")
-# ctx <- tercenCtx(username = "test", password = "test", serviceUri = "http://127.0.0.1:5400")
-ctx <- tercenCtx()
-
+log_message("Starting Hypergate Operator Test")
 
 # Get operator properties
-#CD3⁺CD4⁺CD45RA⁺CCR7⁺CD62L⁺CD27⁺CD8⁺-
-# CD3+ CD4+ CD45RA+ CCR7+ CD27+ CD8-
-high_expression_threshold <- ctx$op.value('high_expression', as.numeric, 0.5)
-low_expression_threshold <- ctx$op.value('low_expression', as.numeric, 0.5)
-expressed_markers_str <- ctx$op.value('expressed_marker', as.character, '')
-not_expressed_markers_str <- ctx$op.value('not_expressed_marker', as.character, '')
+high_expression_threshold <- mock_ctx$op.value('high_expression')
+low_expression_threshold <- mock_ctx$op.value('low_expression')
+expressed_markers_str <- mock_ctx$op.value('expressed_marker')
+not_expressed_markers_str <- mock_ctx$op.value('not_expressed_marker')
 
 log_message(paste0("High expression threshold: ", high_expression_threshold))
 log_message(paste0("Low expression threshold: ", low_expression_threshold))
@@ -52,27 +119,17 @@ not_expressed_markers <- if (not_expressed_markers_str != "") {
   character(0)
 }
 
-# Validate that at least one marker is specified
-if (length(expressed_markers) == 0 && length(not_expressed_markers) == 0) {
-  stop("At least one marker must be specified in either expressed_marker or not_expressed_marker")
-}
-
-# Get data from Tercen context
-log_message("Extracting data from Tercen context")
+# Get data from mock context
+log_message("Extracting data from mock context")
 
 # Get main data with .y values
-main_data <- ctx %>% 
-  select(.y, .ci, .ri) 
+main_data <- select(mock_ctx)
 
 # Get column projections (event IDs)
-col_data <- ctx %>% 
-  cselect() %>%
-  mutate(.ci = seq_len(n()) - 1)  # Add .ci index starting from 0
+col_data <- cselect(mock_ctx)
 
 # Get row projections (variable/channel information)
-row_data <- ctx %>% 
-  rselect() %>%
-  mutate(.ri = seq_len(n()) - 1)  # Add .ri index starting from 0
+row_data <- rselect(mock_ctx)
 
 log_message(paste0("Main data rows: ", nrow(main_data)))
 log_message(paste0("Column data rows: ", nrow(col_data)))
@@ -86,65 +143,13 @@ data_with_markers <- main_data %>%
   left_join(row_data, by = ".ri")
 
 # Reshape to wide format where rows are events and columns are markers
-# We need to handle potential memory issues with large datasets
-# Process in chunks if needed
-
-# Function to process data in chunks
-process_in_chunks <- function(data, chunk_size = 100000) {
-  log_message(paste0("Processing data in chunks of size ", chunk_size))
-  
-  # Get unique event IDs (.ci values)
-  event_ids <- unique(data$.ci)
-  n_events <- length(event_ids)
-  
-  # Calculate number of chunks
-  n_chunks <- ceiling(n_events / chunk_size)
-  
-  # Initialize result list
-  result_list <- list()
-  
-  for (i in 1:n_chunks) {
-    log_message(paste0("Processing chunk ", i, " of ", n_chunks))
-    
-    # Get event IDs for this chunk
-    start_idx <- (i - 1) * chunk_size + 1
-    end_idx <- min(i * chunk_size, n_events)
-    chunk_event_ids <- event_ids[start_idx:end_idx]
-    
-    # Filter data for this chunk
-    chunk_data <- data %>%
-      filter(.ci %in% chunk_event_ids)
-    
-    # Process chunk
-    chunk_result <- chunk_data %>%
-      pivot_wider(
-        id_cols = .ci,
-        names_from = logicle..channel_description,
-        values_from = .y,
-        values_fn = list(.y = mean)  # Use mean if multiple values per cell
-      )
-    
-    # Add to result list
-    result_list[[i]] <- chunk_result
-  }
-  
-  # Combine results
-  do.call(rbind, result_list)
-}
-
-# Check if we need to process in chunks (based on data size)
-if (nrow(data_with_markers) > 1000000) {
-  wide_data <- process_in_chunks(data_with_markers)
-} else {
-  wide_data <- data_with_markers %>%
-    pivot_wider(
-      id_cols = .ci,
-      names_from = logicle..channel_description,
-      values_from = .y,
-      values_fn = list(.y = mean)  # Use mean if multiple values per cell
-    )
-
-}
+wide_data <- data_with_markers %>%
+  pivot_wider(
+    id_cols = .ci,
+    names_from = logicle..channel_description,
+    values_from = .y,
+    values_fn = list(.y = mean)  # Use mean if multiple values per cell
+  )
 
 log_message(paste0("Wide data dimensions: ", nrow(wide_data), " x ", ncol(wide_data)))
 
@@ -159,7 +164,7 @@ for (marker in expressed_markers) {
   if (marker %in% colnames(wide_data)) {
     marker_values <- wide_data[[marker]]
     threshold <- quantile(marker_values, high_expression_threshold, na.rm = TRUE)
-    population_membership <- population_membership & (marker_values > threshold)
+    population_membership <- population_membership & (marker_values >= threshold)
     log_message(paste0("Applied high expression threshold for ", marker, ": ", threshold))
   } else {
     log_message(paste0("Warning: Marker ", marker, " not found in data"))
@@ -171,7 +176,7 @@ for (marker in not_expressed_markers) {
   if (marker %in% colnames(wide_data)) {
     marker_values <- wide_data[[marker]]
     threshold <- quantile(marker_values, low_expression_threshold, na.rm = TRUE)
-    population_membership <- population_membership & (marker_values < threshold)
+    population_membership <- population_membership & (marker_values <= threshold)
     log_message(paste0("Applied low expression threshold for ", marker, ": ", threshold))
   } else {
     log_message(paste0("Warning: Marker ", marker, " not found in data"))
@@ -204,8 +209,7 @@ tryCatch({
     gate_vector = gate_vector,
     level = 1,  # Our population of interest is labeled as 1
     verbose = verbose,
-    beta = 100,  # Equal weight to precision and recall
-    delta_add = 0.0001 #
+    beta = 1  # Equal weight to precision and recall
   )
   
   # Apply the gate to get membership
@@ -216,7 +220,7 @@ tryCatch({
   # Prepare output data
   output_data <- tibble(
     .ci = wide_data$.ci,
-    hypergate_member = as.integer(gate_membership)
+    .hypergate_member = as.integer(gate_membership)
   )
   
 }, error = function(e) {
@@ -226,7 +230,7 @@ tryCatch({
   
   output_data <- tibble(
     .ci = wide_data$.ci,
-    hypergate_member = as.integer(population_membership)
+    .hypergate_member = as.integer(population_membership)
   )
 })
 
@@ -235,10 +239,7 @@ if (nrow(output_data) != nrow(col_data)) {
   log_message("Warning: Output rows don't match column projection rows")
 }
 
-# Save results to Tercen
-log_message("Saving results to Tercen")
-output_data %>%
-  ctx$addNamespace() %>%
-  ctx$save()
+# Save results
+mock_ctx$save(output_data)
 
-log_message("Hypergate operator completed successfully")
+log_message("Hypergate operator test completed successfully")

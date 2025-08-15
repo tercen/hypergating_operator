@@ -1,36 +1,34 @@
 {
-    "name": "Template R Operator",
-    "description": "A template to build a Tercen operator in R.",
-    "tags": ["template"],
+    "name": "Hypergate Operator",
+    "description": "Automatically defines a one vs. rest labelling of cytometry data using the hypergate package.",
+    "tags": ["cytometry", "gating", "hypergate"],
     "authors": ["tercen"],
-    "urls": ["https://github.com/tercen/template-R-operator"],
-    "container":"ghcr.io/tercen/template-R-operator:2.0.0",
+    "urls": ["https://github.com/tercen/hypergate_operator"],
+    "container": "ghcr.io/tercen/hypergate_operator:0.1.0",
     "properties": [
         {
             "kind": "DoubleProperty",
-            "name": "Property1",
-            "defaultValue": 42.0,
-            "description": "Example Double Property"
+            "name": "high_expression",
+            "defaultValue": 0.5,
+            "description": "Quantile threshold for highly expressed markers"
+        },
+        {
+            "kind": "DoubleProperty",
+            "name": "low_expression",
+            "defaultValue": 0.5,
+            "description": "Quantile threshold for lowly expressed markers"
         },
         {
             "kind": "StringProperty",
-            "name": "Property2",
-            "defaultValue": "42",
-            "description": "Example String Property"
+            "name": "expressed_marker",
+            "defaultValue": "",
+            "description": "Comma-separated list of markers that should be highly expressed"
         },
         {
-            "kind": "BooleanProperty",
-            "name": "Property3",
-            "defaultValue": true,
-            "description": "Example Boolean Property"
-        },
-        {
-            "kind": "EnumeratedProperty",
-            "isSingleSelection":true,
-            "name": "Property4",
-            "defaultValue": "element2",
-            "values": ["element1", "element2", "element3"],
-            "description": "Example Enumerated Property"
+            "kind": "StringProperty",
+            "name": "not_expressed_marker",
+            "defaultValue": "",
+            "description": "Comma-separated list of markers that should be lowly expressed"
         }
     ]
 }

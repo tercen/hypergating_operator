@@ -1,11 +1,12 @@
-FROM tercen/runtime-r44:4.4.3-5
+FROM tercen/runtime-r40:4.0.4
 
 COPY . /operator
 WORKDIR /operator
 
-RUN R -e "renv::consent(provided = TRUE); renv::restore(confirm = FALSE)"
+# Install hypergate package and dependencies
+RUN R -e "install.packages(c('dplyr', 'tidyr', 'tibble', 'hypergate'), repos='https://cloud.r-project.org/')"
 
-ENV TERCEN_SERVICE_URI https://tercen.com
+ENV TERCEN_SERVICE_URI="http://tercen:5400/"
 
 ENTRYPOINT ["R", "--no-save", "--no-restore", "--no-environ", "--slave", "-f", "main.R", "--args"]
-CMD ["--taskId", "someid", "--serviceUri", "https://tercen.com", "--token", "sometoken"]
+CMD ["--taskId", "someid", "--serviceUri", "http://tercen:5400/"]
