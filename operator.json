@@ -4,7 +4,7 @@
     "tags": ["cytometry", "gating", "hypergate"],
     "authors": ["tercen"],
     "urls": ["https://github.com/tercen/hypergate_operator"],
-    "container": "ghcr.io/tercen/hypergate_operator:0.1.0",
+    "container": "ghcr.io/tercen/hypergate_operator:main",
     "properties": [
         {
             "kind": "DoubleProperty",
