@@ -3,8 +3,8 @@
     "description": "Automatically defines a one vs. rest labelling of cytometry data using the hypergate package.",
     "tags": ["cytometry", "gating", "hypergate"],
     "authors": ["tercen"],
-    "urls": ["https://github.com/tercen/hypergate_operator"],
-    "container": "ghcr.io/tercen/hypergate_operator:main",
+    "urls": ["https://github.com/tercen/hypergating_operator"],
+    "container": "ghcr.io/tercen/hypergating_operator:main",
     "properties": [
         {
             "kind": "DoubleProperty",
